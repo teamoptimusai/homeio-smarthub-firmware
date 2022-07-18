@@ -1,7 +1,5 @@
 import speech_recognition as sr
-from os import path
-import argparse
-import time
+
 
 class Speech2Text:
     def __init__(self):
