@@ -69,11 +69,18 @@ class VAD:
         frames = list(frames)
         segments = self.collector(frames)
         if save:
-            for i, segments in enumerate(segments):
-                write_wave('chunk_%002d.wav' % (i,), segments, sample_rate)
+            self.save(segments)
         else:
             segments = list(segments)
         return segments
+
+    def save(self, segments):
+        chunks = []
+        for i, segments in enumerate(segments):
+            chunk_name = 'chunk_%002d.wav' % (i,)
+            write_wave(chunk_name, segments, self.sample_rate)
+        return chunks
+
 
 
 if __name__ == '__main__':

@@ -2,9 +2,22 @@ import argparse
 
 from utils.listener import Listener
 from utils.vad import VAD
-# from utils.speech2text import Speech2Text
+from utils.speech2text import Speech2Text
 # from utils.hotword import HotwordDetector
-# from utils.nlu import NLU
+from utils.nlu import NLUEngine, DEFAULT_CONFIG
+
+WAKEWORD = 'hey google'
+NLU_CONFIG = {
+    **DEFAULT_CONFIG,
+    'METADATA_LOCATION': 'core/models/nlu/metadata.bin',
+    'WEIGHTS_LOCATION': 'core/models/nlu/epoch50_best_model_trace.pth',
+}
+
+
+class SpeechRecognition:
+    def __init__(self):
+        listener = Listener(n_channels=1, record_seconds=1,
+                        sample_rate=args.sample_rate,)
 
 
 def main():
@@ -12,17 +25,22 @@ def main():
                         sample_rate=args.sample_rate,)
     vad = VAD(args.sample_rate, args.frame_duration_ms,
               args.padding_duration_ms, debug=args.debug)
-    # speech2text = Speech2Text()
     # hotword_detector = HotwordDetector()
-    # nlu = NLU()
 
     while True:
         listener.get_audio()
         listener.save_audio('temp.wav')
-        segments = vad.process('temp.wav', save=args.debug)
+        segments = vad.process('temp.wav')
         segments = list(segments)
         if len(segments):
-            print("Speech detected!")
+            print("Speech detected!", len(segments))
+            chunks = vad.save(segments)
+            speech2text = Speech2Text()
+            for chunk in chunks:
+                sentence = speech2text.recognize(chunk)
+                if sentence == WAKEWORD:
+                    print('Hotword detected!')
+                    nlu = NLUEngine(config=NLU_CONFIG)
 
 
 if __name__ == "__main__":
