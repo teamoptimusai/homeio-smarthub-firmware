@@ -8,7 +8,7 @@ from .misc import write_wave, read_wave, frame_generator, Frame
 
 class VAD:
     def __init__(self, sample_rate: int, frame_duration_ms: int, padding_duration_ms: int, debug: bool = False):
-        self.vad = webrtcvad.Vad(mode=1)
+        self.vad = webrtcvad.Vad(mode=3)
         self.sample_rate = sample_rate
         self.frame_duration_ms = frame_duration_ms
         self.padding_duration_ms = padding_duration_ms
@@ -79,6 +79,7 @@ class VAD:
         for i, segments in enumerate(segments):
             chunk_name = 'chunk_%002d.wav' % (i,)
             write_wave(chunk_name, segments, self.sample_rate)
+            chunks.append(chunk_name)
         return chunks
 
 

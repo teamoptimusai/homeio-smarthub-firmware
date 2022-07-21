@@ -5,6 +5,7 @@ hostwords = {
     "hey google": "hey google",
 }
 
+
 class HotwordDetector:
     # given a wav file and a hotword, return True if the hotword is detected using snowboy hotword detector
     def __init__(self, hotword):
@@ -12,8 +13,8 @@ class HotwordDetector:
         self.recognizer = sr.Recognizer()
 
     def detect(self, audio):
-        self.recognizer.snowboy_wait_for_hot_word(audio, self.hotword, sensitivity=0.5)
-        
+        self.recognizer.snowboy_wait_for_hot_word(
+            audio, self.hotword, sensitivity=0.5)
 
 
 if __name__ == "__main__":
