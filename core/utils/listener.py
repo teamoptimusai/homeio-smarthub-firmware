@@ -45,8 +45,18 @@ class Listener:
         wf.close()
         self.frames = []
 
+    def save_audio_frames(self, frames, filename):
+        wf = wave.open(filename, 'wb')
+        wf.setnchannels(self.n_channels)
+        wf.setsampwidth(self.p.get_sample_size(FORMAT))
+        wf.setframerate(self.sample_rate)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+
     def get_frames(self):
-        return self.frames
+        temp_frames = self.frames.copy()
+        self.frames = []
+        return temp_frames
 
     def get_audio_as_string(self):
         return b''.join(self.frames)

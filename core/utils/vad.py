@@ -74,6 +74,15 @@ class VAD:
             segments = list(segments)
         return segments
 
+    def process_frames(self, frames: list, sample_rate: int, n_channels: int):
+        assert n_channels == 1
+        frames = frame_generator(
+            self.frame_duration_ms, b''.join(frames), sample_rate)
+        frames = list(frames)
+        segments = self.collector(frames)
+        segments = list(segments)
+        return segments
+
     def save(self, segments):
         chunks = []
         for i, segments in enumerate(segments):
@@ -81,7 +90,7 @@ class VAD:
             write_wave(chunk_name, segments, self.sample_rate)
             chunks.append(chunk_name)
         return chunks
-
+    
 
 
 if __name__ == '__main__':

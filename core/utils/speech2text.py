@@ -13,6 +13,15 @@ class Speech2Text:
         except sr.UnknownValueError:
             return "Sorry, I didn't catch that"
 
+class Wav2Vec:
+    def __init__(self):
+        pass
+
+    def recognize(self, audio):
+        pass
+
+
+
 
 if __name__ == "__main__":
     speech2text = Speech2Text()

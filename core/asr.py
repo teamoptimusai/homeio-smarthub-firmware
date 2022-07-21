@@ -1,60 +1,57 @@
-import argparse
+import time
+import playsound
 
 from utils.listener import Listener
 from utils.vad import VAD
 from utils.speech2text import Speech2Text
-from utils.nlu import NLUEngine, DEFAULT_CONFIG
-# from utils.hotword import HotwordDetector
-
-WAKEWORD = 'hey google'
-NLU_CONFIG = {
-    **DEFAULT_CONFIG,
-    'METADATA_LOCATION': 'core/models/nlu/metadata.bin',
-    'WEIGHTS_LOCATION': 'core/models/nlu/epoch50_best_model_trace.pth',
-}
+from utils.nlu import NLUEngine
+from utils.config import NLU_CONFIG, WAKEWORD, SAMPLE_RATE, RECORD_SECONDS, FRAME_DURATION_MS, PADDING_DURATION_MS
 
 
 class SpeechRecognition:
     def __init__(self, sample_rate, frame_duration_ms, padding_duration_ms, debug=False):
-        self.sample_rate = sample_rate
+        sample_rate = sample_rate
         self.frame_duration_ms = frame_duration_ms
         self.padding_duration_ms = padding_duration_ms
 
-        self.listener = Listener(n_channels=1, record_seconds=1,
+        start = time.time()
+        self.listener = Listener(n_channels=1, record_seconds=RECORD_SECONDS,
                                  sample_rate=sample_rate,)
         self.vad = VAD(self.sample_rate, self.frame_duration_ms,
                        self.padding_duration_ms, debug)
+        print('Listner and VAD Initialized. Time taken: {}'.format(
+            time.time() - start))
 
-    def loop(self):
+    def loop(self, callback):
         while True:
             self.listener.get_audio()
             self.listener.save_audio('temp.wav')
             segments = self.vad.process('temp.wav')
             segments = list(segments)
             if len(segments):
-                print("Speech detected!", len(segments))
+                print("Speech detected!")
                 chunks = self.vad.save(segments)
+
+                start = time.time()
                 speech2text = Speech2Text()
+                print('Speech2Text Initialized. Time taken: {}'.format(
+                    time.time() - start))
+
                 for chunk in chunks:
-                    sentence = speech2text.recognize(chunk)
-                    if sentence == WAKEWORD:
-                        print('Hotword detected!')
-                        nlu = NLUEngine(config=NLU_CONFIG)
+                    sentence = speech2text.recognize('test.wav')
+                    if WAKEWORD in sentence:
+                        playsound.playsound('welcome.mp3')
+                        self.listener.get_audio(record_seconds=4)
+                        self.listener.save_audio('command.wav')
+                        callback(speech2text.recognize('command.wav'))
+
+
+def command_callback(sentence):
+    nlu = NLUEngine(NLU_CONFIG)
+    print(nlu.predict(sentence))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true",
-                        help="enable debug mode")
-    parser.add_argument("--sample_rate", type=int,
-                        default=16000, help="sample rate")
-    parser.add_argument("--frame_duration_ms", type=int,
-                        default=30, help="frame duration")
-    parser.add_argument("--padding_duration_ms", type=int,
-                        default=300, help="padding duration")
-    args = parser.parse_args()
-
-    # args.debug = True
-    asr = SpeechRecognition(args.sample_rate, args.frame_duration_ms,
-                            args.padding_duration_ms, args.debug)
-    asr.loop()
+    asr = SpeechRecognition(SAMPLE_RATE, FRAME_DURATION_MS,
+                            PADDING_DURATION_MS, False)
+    asr.loop(callback=command_callback)

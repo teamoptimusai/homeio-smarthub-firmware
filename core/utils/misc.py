@@ -1,6 +1,7 @@
 import contextlib
 import wave
 import torch
+import logging
 
 # Voice Activity Detection
 
@@ -18,6 +19,14 @@ def write_wave(path, audio, sample_rate):
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         wf.writeframes(audio)
+
+
+def write_wave_frames(path, frames):
+    with contextlib.closing(wave.open(path, 'wb')) as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b''.join(frames))
 
 
 def read_wave(path):
@@ -101,3 +110,17 @@ def classification(enc_intent, enc_scenario, logits, task='intent'):
         enc.inverse_transform(class_preds), len(class_preds))
     class_scores_json = classes_to_scores_json(enc.classes_, class_scores)
     return sentence_labels_json, class_scores_json
+
+# Logging
+
+
+def create_logger(name, filehandler, level=logging.INFO):
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler = logging.FileHandler(filehandler)
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
