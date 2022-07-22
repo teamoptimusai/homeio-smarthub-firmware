@@ -3,8 +3,8 @@ import threading
 from utils.misc import write_wave_frames, create_logger
 from utils.listener import Listener
 from utils.vad import VAD
-from utils.config import FRAME_DURATION_MS, PADDING_DURATION_MS, SAMPLE_RATE, WINDOW_SIZE, MAX_NOSPEECH, NLU_CONFIG
-from utils.speech2text import Speech2Text
+from utils.config import FRAME_DURATION_MS, PADDING_DURATION_MS, SAMPLE_RATE, WINDOW_SIZE, MAX_NOSPEECH, NLU_CONFIG, STT_CONFIG
+from utils.speech2text import transcribe
 from utils.nlu import NLUEngine
 
 # initialize a logger with timestamp
@@ -31,8 +31,7 @@ class ListnerThread(threading.Thread):
 
 def speech_callback():
     logger.info('Speech detected!')
-    speech2text = Speech2Text()
-    sentence = speech2text.recognize('command.wav')
+    sentence = transcribe('command.wav', STT_CONFIG)
     logger.info('Sentence: {}'.format(sentence))
 
     nlu = NLUEngine(NLU_CONFIG)
