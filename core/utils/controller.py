@@ -1,4 +1,3 @@
-
 from actions.iot import hue_lightoff, hue_lightup
 from actions.misc import apologize
 from .misc import create_logger
@@ -29,5 +28,5 @@ class Controller:
             action = actions[scenario][intent]
             action(entities)
         except:
-            logger.error('Error in parsing command')
+            logger.error('Cannot parse the Command')
             apologize()
