@@ -4,6 +4,9 @@ import transformers
 
 from .misc import entity_extraction, classification, simplify_entities, simplify_intent, simplify_scenario
 
+import warnings
+warnings.filterwarnings("ignore")
+
 DEFAULT_CONFIG = {
     'TOKENIZER': transformers.BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True),
     'MAX_LEN': 63,
@@ -18,7 +21,8 @@ class NLUEngine:
         self.tokenizer = config['TOKENIZER']
         self.max_len = config['MAX_LEN']
         self.device = config['DEVICE']
-        self.model = torch.jit.load(config['WEIGHTS_LOCATION']).to(self.device).eval()
+        self.model = torch.jit.load(
+            config['WEIGHTS_LOCATION']).to(self.device).eval()
 
         self.metadata = joblib.load(config['METADATA_LOCATION'])
         self.enc_entity = self.metadata['enc_entity']

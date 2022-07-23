@@ -1,57 +1,94 @@
-import time
-import playsound
+import threading
 
+from utils.misc import write_wave_frames, create_logger
 from utils.listener import Listener
 from utils.vad import VAD
-from utils.speech2text import Speech2Text
+from utils.config import FRAME_DURATION_MS, PADDING_DURATION_MS, SAMPLE_RATE, WINDOW_SIZE, MAX_NOSPEECH, NLU_CONFIG, STT_CONFIG, WAKEWORD
+from utils.speech2text import transcribe
 from utils.nlu import NLUEngine
-from utils.config import NLU_CONFIG, WAKEWORD, SAMPLE_RATE, RECORD_SECONDS, FRAME_DURATION_MS, PADDING_DURATION_MS
+from utils.controller import Controller
+
+# initialize a logger with timestamp
+logger = create_logger('ASR', 'homeio.log')
+frames = []
 
 
-class SpeechRecognition:
-    def __init__(self, sample_rate, frame_duration_ms, padding_duration_ms, debug=False):
-        sample_rate = sample_rate
-        self.frame_duration_ms = frame_duration_ms
-        self.padding_duration_ms = padding_duration_ms
-
-        start = time.time()
-        self.listener = Listener(n_channels=1, record_seconds=RECORD_SECONDS,
+class ListnerThread(threading.Thread):
+    def __init__(self, sample_rate):
+        threading.Thread.__init__(self)
+        self.listener = Listener(n_channels=1, record_seconds=1,
                                  sample_rate=sample_rate,)
-        self.vad = VAD(self.sample_rate, self.frame_duration_ms,
-                       self.padding_duration_ms, debug)
-        print('Listner and VAD Initialized. Time taken: {}'.format(
-            time.time() - start))
 
-    def loop(self, callback):
+    def collect_audio(self):
         while True:
             self.listener.get_audio()
-            self.listener.save_audio('temp.wav')
-            segments = self.vad.process('temp.wav')
+            collected_frames = self.listener.get_frames()
+            frames.extend(collected_frames)
+
+    def run(self):
+        logger.info('Listner Thread started')
+        self.collect_audio()
+
+
+def speech_callback():
+    sentence = transcribe('command.wav', STT_CONFIG)
+    logger.info('Speech detected! Sentence: ' + sentence)
+    if WAKEWORD in sentence:
+        logger.info('Wakeword detected!')
+        output = nlu.predict(sentence)
+        logger.info('Output: {}'.format(output))
+        controller.parse(output)
+
+
+try:
+    listner_thread = ListnerThread(SAMPLE_RATE)
+    listner_thread.start()
+
+    vad = VAD(SAMPLE_RATE, FRAME_DURATION_MS, PADDING_DURATION_MS, False)
+    nlu = NLUEngine(NLU_CONFIG)
+    controller = Controller()
+
+    print("Automatic Speech Recognition Started... Press Ctrl+C Twice to exit")
+
+    speech_frames = []
+    n_nospeech_frames = 0
+    start = 0
+    while True:
+        if len(frames) >= WINDOW_SIZE:
+            temp_frames = frames[start:start+WINDOW_SIZE]
+            write_wave_frames('temp.wav', temp_frames)
+            segments = vad.process('temp.wav')
             segments = list(segments)
             if len(segments):
-                print("Speech detected!")
-                chunks = self.vad.save(segments)
-
-                start = time.time()
-                speech2text = Speech2Text()
-                print('Speech2Text Initialized. Time taken: {}'.format(
-                    time.time() - start))
-
-                for chunk in chunks:
-                    sentence = speech2text.recognize('test.wav')
-                    if WAKEWORD in sentence:
-                        playsound.playsound('welcome.mp3')
-                        self.listener.get_audio(record_seconds=4)
-                        self.listener.save_audio('command.wav')
-                        callback(speech2text.recognize('command.wav'))
-
-
-def command_callback(sentence):
-    nlu = NLUEngine(NLU_CONFIG)
-    print(nlu.predict(sentence))
-
-
-if __name__ == "__main__":
-    asr = SpeechRecognition(SAMPLE_RATE, FRAME_DURATION_MS,
-                            PADDING_DURATION_MS, False)
-    asr.loop(callback=command_callback)
+                speech_frames.extend(temp_frames)
+                start += WINDOW_SIZE
+            elif len(speech_frames):
+                n_nospeech_frames += 1
+                if n_nospeech_frames > MAX_NOSPEECH:
+                    write_wave_frames('command.wav', speech_frames)
+                    speech_callback()
+                    speech_frames = []
+                    frames = []
+                    start = 0
+                    n_nospeech_frames = 0
+                else:
+                    speech_frames.extend(temp_frames)
+                    frames = frames[start+WINDOW_SIZE:]
+                    start = 0
+            else:
+                frames = frames[start+WINDOW_SIZE:]
+                start = 0
+except KeyboardInterrupt:
+    logger.info('Keyboard Interrupt')
+    listner_thread.listener.close()
+    listner_thread.join()
+    logger.info('Listner Thread stopped')
+    logger.info('Exiting')
+    exit(0)
+except Exception as e:
+    logger.error(e)
+    listner_thread.listener.close()
+    listner_thread.join()
+    logger.info('Listner Thread stopped')
+    logger.info('Exiting')
+    exit(0)
