@@ -8,5 +8,5 @@ echo "
 ╚═╝░░╚═╝░╚════╝░╚═╝░░░░░╚═╝╚══════╝╚═╝░╚════╝░"
 echo "-----------------------------------------------"
 echo "Make sure to use the correct python environment"
-CMD="python3 core/asr.py"
+CMD="python3 core/main.py"
 $CMD

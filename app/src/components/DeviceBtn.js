@@ -20,6 +20,7 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import React from "react";
+import { PowerUsageChart } from "./PowerUsageChart";
 
 const DeviceBtn = ({ device }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -107,6 +108,7 @@ const DeviceBtn = ({ device }) => {
                 </StatHelpText>
               </Stat>
             </StatGroup>
+            <PowerUsageChart />
           </DrawerBody>
 
           <DrawerFooter>
