@@ -4,12 +4,12 @@ from utils.misc import write_wave_frames, create_logger
 from utils.listener import Listener
 from utils.vad import VAD
 from utils.config import FRAME_DURATION_MS, PADDING_DURATION_MS, SAMPLE_RATE, WINDOW_SIZE, MAX_NOSPEECH, NLU_CONFIG, STT_CONFIG, WAKEWORD
-from utils.speech2text import transcribe
+from utils.speech2text import Wav2Vec2_transformer
 from utils.nlu import NLUEngine
 from utils.controller import Controller
 
 # initialize a logger with timestamp
-logger = create_logger('ASR', 'homeio.log')
+logger = create_logger('Main', 'homeio.log')
 frames = []
 
 
@@ -31,7 +31,7 @@ class ListnerThread(threading.Thread):
 
 
 def speech_callback():
-    sentence = transcribe('command.wav', STT_CONFIG)
+    sentence = stt.transcribe('command.wav')
     logger.info('Speech detected! Sentence: ' + sentence)
     if WAKEWORD in sentence:
         logger.info('Wakeword detected!')
@@ -47,6 +47,7 @@ try:
     vad = VAD(SAMPLE_RATE, FRAME_DURATION_MS, PADDING_DURATION_MS, False)
     nlu = NLUEngine(NLU_CONFIG)
     controller = Controller()
+    stt = Wav2Vec2_transformer()
 
     print("Automatic Speech Recognition Started... Press Ctrl+C Twice to exit")
 

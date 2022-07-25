@@ -3,7 +3,6 @@
 # platform: osx-64
 gtts
 playsound
-pocketsphinx
 pyaudio
 pytorch
 speechrecognition
