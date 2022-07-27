@@ -1,19 +1,12 @@
 import speech_recognition as sr
-# from itertools import groupby
-# import json
-# from pathlib import Path
-# import numpy as np
-# import wave
-# from openvino.runtime import Core, PartialShape
 import transformers
 import soundfile as sf
 import torch
+import logging
+
 from .misc import create_logger
 
-DEFAULT_CONFIG = {
-    'XML_PATH': 'core/models/speech2text/wav2vec2-base.xml',
-    'DEVICE': 'CPU',
-}
+logging.getLogger('transformers').setLevel(logging.ERROR)
 
 logger = create_logger('STT', 'homeio.log')
 
@@ -31,6 +24,18 @@ class CMUSphinx:
             logger.error(e)
             return "Sorry, I didn't catch that"
 
+# from itertools import groupby
+# import json
+# from pathlib import Path
+# import numpy as np
+# import wave
+# from openvino.runtime import Core, PartialShape
+
+
+DEFAULT_CONFIG = {
+    'XML_PATH': 'core/models/speech2text/wav2vec2-base.xml',
+    'DEVICE': 'CPU',
+}
 
 # class Wav2Vec2_OpenVINO:
     # alphabet = [
@@ -81,6 +86,22 @@ class CMUSphinx:
     #     res_string = res_string.lower()
     #     return res_string
 
+# def transcribe_wav2vec_openvino(wavfile, config):
+#     with wave.open(wavfile, 'rb') as wave_read:
+#         channel_num, _, _, pcm_length, _, _ = wave_read.getparams()
+#         audio = np.frombuffer(wave_read.readframes(
+#             pcm_length * channel_num), dtype=np.int16).reshape((1, pcm_length))
+#         audio = audio.astype(float) / np.iinfo(np.int16).max
+
+#     core = Core()
+#     model = Wav2Vec(core, config['XML_PATH'],
+#                         audio.shape, config['DEVICE'], None, False)
+#     normalized_audio = model.preprocess(audio)
+#     character_probs = model.infer(normalized_audio)
+#     transcription = model.decode(character_probs)
+    # return transcription
+
+
 class Wav2Vec2_transformer:
     def __init__(self):
         model_name = "facebook/wav2vec2-base-960h"
@@ -102,22 +123,6 @@ class Wav2Vec2_transformer:
             return "Sorry, I didn't catch that"
 
 
-# def transcribe_wav2vec_openvino(wavfile, config):
-#     with wave.open(wavfile, 'rb') as wave_read:
-#         channel_num, _, _, pcm_length, _, _ = wave_read.getparams()
-#         audio = np.frombuffer(wave_read.readframes(
-#             pcm_length * channel_num), dtype=np.int16).reshape((1, pcm_length))
-#         audio = audio.astype(float) / np.iinfo(np.int16).max
-
-#     core = Core()
-#     model = Wav2Vec(core, config['XML_PATH'],
-#                         audio.shape, config['DEVICE'], None, False)
-#     normalized_audio = model.preprocess(audio)
-#     character_probs = model.infer(normalized_audio)
-#     transcription = model.decode(character_probs)
-    # return transcription
-
-
 def transcribe_sphinx(wavfile):
     sphinx = CMUSphinx()
     return sphinx.recognize(wavfile)
@@ -125,4 +130,5 @@ def transcribe_sphinx(wavfile):
 
 if __name__ == "__main__":
     print(CMUSphinx().recognize('command.wav'))
+    print(Wav2Vec2_transformer().transcribe('command.wav'))
     # print(transcribe_wav2vec('command.wav', DEFAULT_CONFIG))

@@ -3,6 +3,7 @@ Get Audio frames from the microphone of the device
 '''
 import pyaudio
 import wave
+import collections
 
 # listener defaults
 CHUNK_SIZE = 1024
@@ -21,14 +22,14 @@ class Listener:
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
         self.record_seconds = record_seconds
-        self.frames = []
+        self.frames = collections.deque(maxlen=int(
+            sample_rate / chunk_size * record_seconds))
 
-    def get_audio(self, record_seconds=None):
-        if record_seconds is None:
-            record_seconds = self.record_seconds
+    def get_audio(self):
         self.frames = []
-        for i in range(0, int(self.sample_rate / self.chunk_size * record_seconds)):
-            data = self.stream.read(self.chunk_size, exception_on_overflow = False)
+        for i in range(0, int(self.sample_rate / self.chunk_size * self.record_seconds)):
+            data = self.stream.read(
+                self.chunk_size, exception_on_overflow=False)
             self.frames.append(data)
 
     def close(self):
@@ -54,9 +55,7 @@ class Listener:
         wf.close()
 
     def get_frames(self):
-        temp_frames = self.frames.copy()
-        self.frames = []
-        return temp_frames
+        return list(self.frames)
 
     def get_audio_as_string(self):
         return b''.join(self.frames)

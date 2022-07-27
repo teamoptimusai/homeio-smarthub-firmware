@@ -1,7 +1,7 @@
 from utils.nlu import DEFAULT_CONFIG as NLU_DEFAULT_CONFIG
 from utils.speech2text import DEFAULT_CONFIG as STT_DEFAULT_CONFIG
 
-WAKEWORD = 'hello'
+WAKEWORDS = ['hello', 'hi', 'hey', 'hillo']
 
 # nlu Configurations
 NLU_CONFIG = {
