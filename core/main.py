@@ -56,16 +56,15 @@ try:
     start = 0
     while True:
         if len(frames) >= WINDOW_SIZE:
-            temp_frames = frames[start:start+WINDOW_SIZE]
-            write_wave_frames('temp.wav', temp_frames)
+            write_wave_frames('temp.wav', frames[start:start+WINDOW_SIZE])
             segments = vad.process('temp.wav')
             segments = list(segments)
             if len(segments):
-                speech_frames.extend(temp_frames)
+                speech_frames.extend(frames[start:start+WINDOW_SIZE])
                 start += WINDOW_SIZE
             elif len(speech_frames):
                 n_nospeech_frames += 1
-                if n_nospeech_frames > MAX_NOSPEECH:
+                if (n_nospeech_frames > MAX_NOSPEECH) or (len(speech_frames)/SAMPLE_RATE > 3):
                     write_wave_frames('command.wav', speech_frames)
                     speech_callback()
                     speech_frames = []
@@ -73,7 +72,7 @@ try:
                     start = 0
                     n_nospeech_frames = 0
                 else:
-                    speech_frames.extend(temp_frames)
+                    speech_frames.extend(frames[start:start+WINDOW_SIZE])
                     frames = frames[start+WINDOW_SIZE:]
                     start = 0
             else:
