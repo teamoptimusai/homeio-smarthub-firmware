@@ -1,105 +1,131 @@
+import wave
 import webrtcvad
 import collections
-import sys
+import pyaudio
+from array import array
+import time
 
-from .listener import Listener
-from .misc import write_wave, read_wave, frame_generator, Frame
+from .misc import create_logger
+
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+RATE = 16000
+CHUNK_DURATION_MS = 30       # supports 10, 20 and 30 (ms)
+PADDING_DURATION_MS = 1500   # 1 sec jugement
+CHUNK_SIZE = int(RATE * CHUNK_DURATION_MS / 1000)  # chunk to read
+CHUNK_BYTES = CHUNK_SIZE * 2  # 16bit = 2 bytes, PCM
+NUM_PADDING_CHUNKS = int(PADDING_DURATION_MS / CHUNK_DURATION_MS)
+
+NUM_WINDOW_CHUNKS = int(240 / CHUNK_DURATION_MS)
+# NUM_WINDOW_CHUNKS = int(400 / CHUNK_DURATION_MS)  # 400 ms/ 30ms  ge
+
+NUM_WINDOW_CHUNKS_END = NUM_WINDOW_CHUNKS * 2
+START_OFFSET = int(NUM_WINDOW_CHUNKS * CHUNK_DURATION_MS * 0.5 * RATE)
+
+logger = create_logger('VAD', 'homeio.log')
 
 
 class VAD:
-    def __init__(self, sample_rate: int, frame_duration_ms: int, padding_duration_ms: int, debug: bool = False):
-        self.vad = webrtcvad.Vad(mode=3)
-        self.sample_rate = sample_rate
-        self.frame_duration_ms = frame_duration_ms
-        self.padding_duration_ms = padding_duration_ms
-        self.debug = debug
+    def __init__(self):
+        self.vad = webrtcvad.Vad(1)
+        self.pa = pyaudio.PyAudio()
+        self.stream = self.pa.open(format=FORMAT,
+                                   channels=CHANNELS,
+                                   rate=RATE,
+                                   input=True,
+                                   start=False,
+                                   # input_device_index=2,
+                                   frames_per_buffer=CHUNK_SIZE)
+        self.got_a_sentence = False
+        logger.info('VAD initialized')
 
-    def is_speech(self, frame: Frame):
-        return self.vad.is_speech(frame.bytes, self.sample_rate)
+    def loop(self, callback):
+        while True:
+            ring_buffer = collections.deque(maxlen=NUM_PADDING_CHUNKS)
+            triggered = False
+            ring_buffer_flags = [0] * NUM_WINDOW_CHUNKS
+            ring_buffer_index = 0
 
-    def collector(self, frames: list[Frame]):
-        num_padding_frames = int(
-            self.padding_duration_ms / self.frame_duration_ms)
-        ring_buffer = collections.deque(maxlen=num_padding_frames)
+            ring_buffer_flags_end = [0] * NUM_WINDOW_CHUNKS_END
+            ring_buffer_index_end = 0
 
-        triggered = False
-        voiced_frames = []
+            raw_data = array('h')
+            index = 0
+            start_point = 0
+            StartTime = time.time()
+            self.stream.start_stream()
 
-        for frame in frames:
-            is_speech = self.is_speech(frame)
+            while not self.got_a_sentence:
+                chunk = self.stream.read(CHUNK_SIZE)
+                raw_data.extend(array('h', chunk))
+                index += CHUNK_SIZE
+                TimeUse = time.time() - StartTime
 
-            if self.debug:
-                sys.stdout.write('1' if is_speech else '0')
+                active = self.vad.is_speech(chunk, RATE)
 
-            if not triggered:
-                ring_buffer.append((frame, is_speech))
-                num_voiced = len([f for f, speech in ring_buffer if speech])
-                if num_voiced > 0.9 * ring_buffer.maxlen:
-                    triggered = True
+                ring_buffer_flags[ring_buffer_index] = 1 if active else 0
+                ring_buffer_index += 1
+                ring_buffer_index %= NUM_WINDOW_CHUNKS
 
-                    if self.debug:
-                        sys.stdout.write('+(%s)' % (frame.timestamp,))
+                ring_buffer_flags_end[ring_buffer_index_end] = 1 if active else 0
+                ring_buffer_index_end += 1
+                ring_buffer_index_end %= NUM_WINDOW_CHUNKS_END
 
-                    for f, s in ring_buffer:
-                        voiced_frames.append(f)
-                    ring_buffer.clear()
-            else:
-                voiced_frames.append(frame)
-                ring_buffer.append((frame, is_speech))
-                num_unvoiced = len(
-                    [f for f, speech in ring_buffer if not speech])
-                if num_unvoiced > 0.9 * ring_buffer.maxlen:
-                    if self.debug:
-                        sys.stdout.write('-(%s)' %
-                                         (frame.timestamp + frame.duration))
-                    triggered = False
-                    yield b''.join([f.bytes for f in voiced_frames])
-                    ring_buffer.clear()
-                    voiced_frames = []
+                # start point detection
+                if not triggered:
+                    ring_buffer.append(chunk)
+                    num_voiced = sum(ring_buffer_flags)
+                    if num_voiced > 0.8 * NUM_WINDOW_CHUNKS:
+                        triggered = True
+                        start_point = index - CHUNK_SIZE * 20  # start point
+                        ring_buffer.clear()
+                # end point detection
+                else:
+                    ring_buffer.append(chunk)
+                    num_unvoiced = NUM_WINDOW_CHUNKS_END - \
+                        sum(ring_buffer_flags_end)
 
-        if triggered & self.debug:
-            sys.stdout.write('-(%s)' % (frame.timestamp + frame.duration))
-        if voiced_frames:
-            yield b''.join([f.bytes for f in voiced_frames])
+                    if num_unvoiced > 0.90 * NUM_WINDOW_CHUNKS_END or TimeUse > 10:
+                        triggered = False
+                        self.got_a_sentence = True
 
-    def process(self, path: str, save: bool = False):
-        audio, sample_rate, n_channels = read_wave(path)
-        assert n_channels == 1
-        frames = frame_generator(self.frame_duration_ms, audio, sample_rate)
-        frames = list(frames)
-        segments = self.collector(frames)
-        if save:
-            self.save(segments)
-        else:
-            segments = list(segments)
-        return segments
+            self.stream.stop_stream()
+            logger.info('Speech Detected')
+            self.got_a_sentence = False
 
-    def process_frames(self, frames: list, sample_rate: int, n_channels: int):
-        assert n_channels == 1
-        frames = frame_generator(
-            self.frame_duration_ms, b''.join(frames), sample_rate)
-        frames = list(frames)
-        segments = self.collector(frames)
-        segments = list(segments)
-        return segments
+            # write to file
+            raw_data.reverse()
+            for index in range(start_point):
+                raw_data.pop()
 
-    def save(self, segments):
-        chunks = []
-        for i, segments in enumerate(segments):
-            chunk_name = 'chunk_%002d.wav' % (i,)
-            write_wave(chunk_name, segments, self.sample_rate)
-            chunks.append(chunk_name)
-        return chunks
-    
+            raw_data.reverse()
+            raw_data = self.normalize(raw_data)
+            wav_data = raw_data[44:len(raw_data)]
+            # convert to bytes
+            wav_data = array('h', wav_data)
+            wav_data = wave.struct.pack('h' * len(wav_data), *wav_data)
+            # write to a wav file
+            wf = wave.open('output.wav', 'wb')
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(self.pa.get_sample_size(FORMAT))
+            wf.setframerate(RATE)
+            wf.writeframes(wav_data)
+            wf.close()
+            callback('output.wav')
+
+    @staticmethod
+    def normalize(snd_data):
+        MAXIMUM = 32767  # 16384
+        times = float(MAXIMUM) / max(abs(i) for i in snd_data)
+        r = array('h')
+        for i in snd_data:
+            r.append(int(i * times))
+        return r
+
+    def close(self):
+        self.stream.close()
 
 
-if __name__ == '__main__':
-    from listener import Listener
-
-    listener = Listener(n_channels=1, record_seconds=10, sample_rate=16000)
-    vad = VAD(sample_rate=16000, frame_duration_ms=30, padding_duration_ms=300)
-
-    for x in range(1):
-        listener.get_audio()
-        listener.save_audio(f'test{x}.wav')
-        vad.process(f'test{x}.wav', save=True)
+if __name__ == "__main__":
+    vad = VAD()
+    vad.loop(lambda x: print(x))
